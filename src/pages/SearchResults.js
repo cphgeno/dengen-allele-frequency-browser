@@ -8,7 +8,6 @@ import Logos from '../components/Logos';
 import { Link } from "react-router-dom";
 import config from '../config';
 
-//const endpoint=`http://10.62.55.108:5050/api`
 const endpoint=config.BEACON_API
 
 

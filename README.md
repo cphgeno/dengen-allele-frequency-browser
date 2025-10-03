@@ -1,70 +1,150 @@
-# Getting Started with Create React App
+# dengen Allele Frequency Browser
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+An interactive web application to explore and visualize allele frequencies for the **DenGen project**.
 
-## Available Scripts
+**Note:** This browser relies on the API and database from the **Beacon production implementation**:
+https://github.com/EGA-archive/beacon2-pi-api
 
-In the project directory, you can run:
+---
 
-### `yarn start`
+## Table of Contents
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+1. Features  
+2. Architecture & Stack  
+3. Installation / Setup  
+4. Usage  
+5. Data Sources & Format  
+6. Configuration & Environment Variables  
+7. Deployment  
+8. Contributing  
+9. License  
+10. Contact  
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+---
 
-### `yarn test`
+## Features
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- Interactive allele frequency visualization by genomic variant, region, or gene(s)  
+- Filtering and search of variants  
+- Responsive UI built with React + Tailwind  
+- Relies on the Beacon API and database for allele frequency data  
+- Easy integration of new datasets  
+- Dockerized setup for reproducibility  
 
-### `yarn build`
+---
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Architecture & Stack
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- Frontend: React + Tailwind CSS  
+- Backend / API: Beacon 2 API ([GitHub](https://github.com/EGA-archive/beacon2-pi-api))  
+- Deployment: Docker & docker-compose support  
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+---
 
-### `yarn eject`
+## Installation / Setup
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### Prerequisites
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- Node.js (v14+)  
+- Yarn (or npm)  
+- Docker & docker-compose (optional but recommended)  
+- Access to a running Beacon 2 API instance  
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### Local Development
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+1. Clone the repo:
 
-## Learn More
+   git clone https://github.com/MauricioMoldes/dengen-allele-frequency-browser.git
+   cd dengen-allele-frequency-browser
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+2. Install dependencies:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+   yarn install
 
-### Code Splitting
+3. Configure environment variables:  
+   Copy `.env.development.example` to `.env.development` and set the `REACT_APP_API_URL` to your Beacon 2 API instance.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+4. Start the dev server:
 
-### Analyzing the Bundle Size
+   yarn start
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+   The app should open at:  
+   http://localhost:3000
 
-### Making a Progressive Web App
+5. Run tests:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+   yarn test
 
-### Advanced Configuration
+6. Build for production:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+   yarn build
 
-### Deployment
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+## Usage
 
-### `yarn build` fails to minify
+Once running, you can:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- Browse allele frequencies by genomic variant, region, or gene(s)  
+- Filter and search variants  
+- Data is fetched dynamically from the Beacon 2 API  
+
+---
+
+## Data Sources & Format
+
+Data comes from the **Beacon production database**. 
+
+---
+
+## Configuration & Environment Variables
+
+Example variables (set in `.env` files):
+
+| Variable              | Example Value                          | Purpose            |
+|-----------------------|----------------------------------------|--------------------|
+| REACT_APP_BEACON_API     | http://beacon.dengen.dk             | URL of Beacon 2 API |
+
+
+---
+
+## Deployment
+
+### With Docker
+
+Quick deployment using Docker:
+
+   docker-compose up --build
+
+This will build and start the frontend. Ensure that your Beacon API instance is running and accessible.
+
+---
+
+## Contributing
+
+Contributions are welcome! To contribute:
+
+1. Fork the repository  
+2. Create a feature branch:  
+
+   git checkout -b feature-name
+
+3. Commit your changes and push  
+4. Submit a Pull Request with a clear description  
+
+Please follow coding style, write tests, and document new features.
+
+---
+
+## License
+
+MIT
+
+---
+
+## Contact
+
+For questions, suggestions, or issues:  
+
+- Author: Mauricio Moldes  
+- GitHub Issues: https://github.com/MauricioMoldes/dengen-allele-frequency-browser/issues
