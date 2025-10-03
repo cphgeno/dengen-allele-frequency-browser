@@ -1,9 +1,13 @@
-# dengen Allele Frequency Browser
+# Dengen Allele Frequency Browser (Beacon Allele Frequency Browser)
 
 An interactive web application to explore and visualize allele frequencies for the **DenGen project**.
 
-**Note:** This browser relies on the API and database from the **Beacon production implementation**:
+**Note:** This browser relies on the API and database from the **Beacon production implementation**:  
 https://github.com/EGA-archive/beacon2-pi-api
+
+This implementation is **fully reusable for any Beacon instance**. You can deploy it with any Beacon API and database, making it a **generic Beacon Allele Frequency Browser**.  
+The DenGen version is just one example, but the same code can be adapted for other datasets or Beacon instances.
+
 
 ---
 
@@ -54,30 +58,31 @@ https://github.com/EGA-archive/beacon2-pi-api
 
 1. Clone the repo:
 
-   git clone https://github.com/MauricioMoldes/dengen-allele-frequency-browser.git
+   ```git clone https://github.com/MauricioMoldes/dengen-allele-frequency-browser.git
    cd dengen-allele-frequency-browser
+   ```
 
 2. Install dependencies:
 
-   yarn install
+   ```yarn install```
 
 3. Configure environment variables:  
-   Copy `.env.development.example` to `.env.development` and set the `REACT_APP_API_URL` to your Beacon 2 API instance.
+   Copy `.env.development.example` to `.env.development` and set the `REACT_APP_BEACON_API` to your Beacon 2 API instance.
 
 4. Start the dev server:
 
-   yarn start
+   ```yarn start```
 
    The app should open at:  
    http://localhost:3000
 
 5. Run tests:
 
-   yarn test
+   ```yarn test```
 
 6. Build for production:
 
-   yarn build
+   ```yarn build```
 
 ---
 
