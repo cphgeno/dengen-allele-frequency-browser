@@ -1,715 +1,328 @@
-import React, { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
-
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
-import Logos from '../components/Logos';
-
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from 'react';
+import { useLocation, Link } from 'react-router-dom';
+import Layout from './Layout';
 import config from '../config';
 
-const endpoint=config.BEACON_API
+const endpoint = config.BEACON_API;
 
-
-const SearchResults = () => {
-  const [loading, setLoading] = useState(true); // Set loading initially to true
-  const [error, setError] = useState(null);
-  const [data, setData] = useState([]);
-  const [expandedRows, setExpandedRows] = useState({});
-  const location = useLocation();
-  const queryParams = new URLSearchParams(location.search);
-  const query = queryParams.get("query"); // Get the query from the URL
-  const type = queryParams.get("type"); // Get the type from the URL
-  const variantFromState = location.state?.variant;
-  const [rsID, setRsID] = useState(null);
-  
-  
-  
-const [sortColumn, setSortColumn] = useState(null);
-const [sortDirection, setSortDirection] = useState("asc");
-
-const handleSort = (column) => {
-  if (sortColumn === column) {
-    setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-  } else {
-    setSortColumn(column);
-    setSortDirection("asc");
-  }
+// ── Sorting header cell ────────────────────────────────────────────
+const SortTh = ({ column, label, sortColumn, sortDirection, onSort }) => {
+  const active = sortColumn === column;
+  return (
+    <th
+      onClick={() => onSort(column)}
+      style={{
+        padding: '10px 14px', fontSize: '12px', fontWeight: 500,
+        color: active ? 'var(--dg-blue)' : 'var(--dg-text-muted)',
+        textAlign: 'left', cursor: 'pointer', userSelect: 'none',
+        borderBottom: '0.5px solid var(--dg-border)',
+        background: 'var(--dg-blue-bg)', whiteSpace: 'nowrap',
+        transition: 'color 0.15s',
+      }}
+    >
+      {label} {active ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+    </th>
+  );
 };
 
-const sortedData = [...data].sort((a, b) => {
-  if (!sortColumn) return 0;
+// ── External resource pill ─────────────────────────────────────────
+const ResourcePill = ({ name, url }) => (
+  <a href={url} target="_blank" rel="noopener noreferrer" style={{
+    fontSize: '12px', fontWeight: 500,
+    color: 'var(--dg-blue)',
+    background: 'var(--dg-blue-bg)',
+    border: '0.5px solid var(--dg-blue-border)',
+    borderRadius: '99px', padding: '4px 12px',
+    textDecoration: 'none', whiteSpace: 'nowrap',
+    transition: 'background 0.15s',
+  }}
+    onMouseOver={e => e.currentTarget.style.background = '#daeeff'}
+    onMouseOut={e => e.currentTarget.style.background = 'var(--dg-blue-bg)'}
+  >
+    {name}
+  </a>
+);
 
-  const valA = a[sortColumn] ?? 0;
-  const valB = b[sortColumn] ?? 0;
+// ── Loading spinner ────────────────────────────────────────────────
+const Spinner = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0', alignItems: 'center', gap: '12px' }}>
+    <div style={{
+      width: '20px', height: '20px', borderRadius: '50%',
+      border: '2px solid var(--dg-blue-border)',
+      borderTopColor: 'var(--dg-blue)',
+      animation: 'dg-spin 0.7s linear infinite',
+    }} />
+    <style>{`@keyframes dg-spin { to { transform: rotate(360deg); } }`}</style>
+    <span style={{ fontSize: '13px', color: 'var(--dg-text-muted)' }}>Fetching data…</span>
+  </div>
+);
 
-  return sortDirection === "asc" ? valA - valB : valB - valA;
-});
+// ── Main component ─────────────────────────────────────────────────
+const SearchResults = () => {
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
+  const [data, setData]               = useState([]);
+  const [rsID, setRsID]               = useState(null);
+  const [sortColumn, setSortColumn]   = useState(null);
+  const [sortDirection, setSortDirection] = useState('asc');
 
+  const location      = useLocation();
+  const params        = new URLSearchParams(location.search);
+  const query         = params.get('query');
+  const type          = params.get('type');
+  const variantFromState = location.state?.variant;
+
+  const handleSort = column => {
+    if (sortColumn === column) setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortColumn(column); setSortDirection('asc'); }
+  };
+
+  const sortedData = [...data].sort((a, b) => {
+    if (!sortColumn) return 0;
+    const va = a[sortColumn] ?? 0;
+    const vb = b[sortColumn] ?? 0;
+    return sortDirection === 'asc' ? va - vb : vb - va;
+  });
+
+  // ── Data fetching (unchanged logic) ──
   useEffect(() => {
-
-    if (variantFromState) {
-    setData([variantFromState]);
-    setLoading(false);
-    return;
-  }
-    
+    if (variantFromState) { setData([variantFromState]); setLoading(false); return; }
     if (!query || !type) return;
-  
+
     const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-  
+      setLoading(true); setError(null);
       try {
-        if (type === "variant") {
-
-          setError(null);
-          setLoading(true);
-
-          const [chrom, pos, ref, alt] = query.split("-");
-          if (!chrom || !pos || !ref || !alt) {
-            throw new Error("Invalid variant format. Expected chr-pos-ref-alt.");
-          }
-          // To update
-          const apiUrl = `${endpoint}/g_variants?start=${pos}&alternateBases=${alt}&referenceBases=${ref}&referenceName=${chrom.replace("chr", "")}&assemblyId=GRCh38&limit=1000000`;
-  
-          const response = await fetch(apiUrl, {
-            headers: { "Content-Type": "application/json" },
-          });
-  
-          if (!response.ok) throw new Error("Failed to fetch variant data");
+        if (type === 'variant') {
+          const [chrom, pos, ref, alt] = query.split('-');
+          if (!chrom || !pos || !ref || !alt) throw new Error('Invalid variant format. Expected chr-pos-ref-alt.');
+          const apiUrl = `${endpoint}/g_variants?start=${pos}&alternateBases=${alt}&referenceBases=${ref}&referenceName=${chrom.replace('chr', '')}&assemblyId=GRCh38&limit=1000000`;
+          const response = await fetch(apiUrl, { headers: { 'Content-Type': 'application/json' } });
+          if (!response.ok) throw new Error('Failed to fetch variant data');
           const result = await response.json();
-  
-          const parsedData = result.response?.resultSets?.[0]?.results.slice(0, 1).flatMap((variant) => {
-            const frequencyData = variant.frequencyInPopulations?.[0]?.frequencies?.[0];
-            if (frequencyData) {
-              return [{
-                VariantID: query,
-                Category: "DenGen",
-                AlleleCount: frequencyData.alleleCount,
-                AlleleNumber: frequencyData.alleleNumber,
-                Homozygotes: frequencyData.alleleCountHomozygous || 0,
-                AlleleFrequency: frequencyData.alleleFrequency?.toFixed(6) || "N/A",
-              }];
-            }
+          const parsedData = result.response?.resultSets?.[0]?.results.slice(0, 1).flatMap(variant => {
+            const freq = variant.frequencyInPopulations?.[0]?.frequencies?.[0];
+            if (freq) return [{ VariantID: query, Category: 'DenGen', AlleleCount: freq.alleleCount, AlleleNumber: freq.alleleNumber, Homozygotes: freq.alleleCountHomozygous || 0, AlleleFrequency: freq.alleleFrequency?.toFixed(6) || 'N/A' }];
             return [];
           }) || [];
-  
           setData(parsedData);
-  
-        } else if (type === "gene") {
 
-          setError(null);
-          setLoading(true);
-
-          // Step 1: Fetch gene coordinates
-          const geneRes = await fetch(
-            `https://rest.ensembl.org/lookup/symbol/homo_sapiens/${query}?content-type=application/json`
-          );
+        } else if (type === 'gene') {
+          const geneRes = await fetch(`https://rest.ensembl.org/lookup/symbol/homo_sapiens/${query}?content-type=application/json`);
           if (!geneRes.ok) throw new Error(`Gene ${query} not found`);
-  
           const geneData = await geneRes.json();
           const { seq_region_name: chrom, start, end } = geneData;
-  
-          console.log(`Gene ${query} => chr${chrom}:${start}-${end}`);
-  
-          // Step 2: Fetch all variants in the region
           const regionUrl = `${endpoint}/g_variants?start=${start}&end=${end}&referenceName=${chrom}&assemblyId=GRCh38&limit=1000000`;
-  
-          const response = await fetch(regionUrl, {
-            headers: { "Content-Type": "application/json" },
-          });
-  
-          if (!response.ok) throw new Error("Failed to fetch regional variants");
-  
+          const response = await fetch(regionUrl, { headers: { 'Content-Type': 'application/json' } });
+          if (!response.ok) throw new Error('Failed to fetch regional variants');
           const result = await response.json();
           const variants = result.response?.resultSets?.[0]?.results || [];
-  
-          const parsedData = variants.flatMap((variant) => {
-            const frequencyData = variant.frequencyInPopulations?.[0]?.frequencies?.[0];
-            if (frequencyData) {
-              const start = variant.variation?.location?.interval?.start?.value;
-              const referenceBases = variant.variation?.referenceBases;
-              const alternateBases = variant.variation?.alternateBases;
-              const varID = `chr${chrom}-${start}-${referenceBases}-${alternateBases}`;
-              return [{
-                VariantID: varID,
-                Category: "DenGen",
-                AlleleCount: frequencyData.alleleCount,
-                AlleleNumber: frequencyData.alleleNumber,
-                Homozygotes: frequencyData.alleleCountHomozygous || 0,
-                AlleleFrequency: frequencyData.alleleFrequency?.toFixed(6) || "N/A",
-              }];
+          setData(variants.flatMap(variant => {
+            const freq = variant.frequencyInPopulations?.[0]?.frequencies?.[0];
+            if (freq) {
+              const s = variant.variation?.location?.interval?.start?.value;
+              const ref = variant.variation?.referenceBases;
+              const alt = variant.variation?.alternateBases;
+              const varID = `chr${chrom}-${s}-${ref}-${alt}`;
+              return [{ VariantID: varID, Category: 'DenGen', AlleleCount: freq.alleleCount, AlleleNumber: freq.alleleNumber, Homozygotes: freq.alleleCountHomozygous || 0, AlleleFrequency: freq.alleleFrequency?.toFixed(6) || 'N/A' }];
             }
             return [];
-          });
-  
-          setData(parsedData);
-        
-        } else if (type === "region") {
+          }));
 
-          setError(null);
-          setLoading(true);
-
+        } else if (type === 'region') {
           const regionMatch = query.match(/^chr(\w+)-(\d+)-(\d+)$/);
-          if (!regionMatch) throw new Error("Invalid region format. Use chr1-start-end");
-
+          if (!regionMatch) throw new Error('Invalid region format. Use chr1-start-end');
           const [, chrom, start, end] = regionMatch;
-
-          console.log(`Region query => chr${chrom}:${start}-${end}`);
-
-        
           const regionUrl = `${endpoint}/g_variants?start=${start}&end=${end}&referenceName=${chrom}&assemblyId=GRCh38&limit=1000000`;
-
-          const response = await fetch(regionUrl, {
-            headers: { "Content-Type": "application/json" },
-          });
-        
-          if (!response.ok) throw new Error("Failed to fetch region variants");
-        
+          const response = await fetch(regionUrl, { headers: { 'Content-Type': 'application/json' } });
+          if (!response.ok) throw new Error('Failed to fetch region variants');
           const result = await response.json();
           const variants = result.response?.resultSets?.[0]?.results || [];
-        
-          const parsedData = variants.flatMap((variant) => {
-            const frequencyData = variant.frequencyInPopulations?.[0]?.frequencies?.[0];
-            const start = variant.variation?.location?.interval?.start?.value;
-            const referenceBases = variant.variation?.referenceBases;
-            const alternateBases = variant.variation?.alternateBases;
-        
-            if (frequencyData && start !== undefined && referenceBases && alternateBases) {
-              const varID = `chr${chrom}-${start}-${referenceBases}-${alternateBases}`;
-              return [{
-                VariantID: varID,
-                Category: "DenGen",
-                AlleleCount: frequencyData.alleleCount,
-                AlleleNumber: frequencyData.alleleNumber,
-                Homozygotes: frequencyData.alleleCountHomozygous || 0,
-                AlleleFrequency: frequencyData.alleleFrequency?.toFixed(6) || "N/A",
-              }];
+          setData(variants.flatMap(variant => {
+            const freq = variant.frequencyInPopulations?.[0]?.frequencies?.[0];
+            const s = variant.variation?.location?.interval?.start?.value;
+            const ref = variant.variation?.referenceBases;
+            const alt = variant.variation?.alternateBases;
+            if (freq && s !== undefined && ref && alt) {
+              const varID = `chr${chrom}-${s}-${ref}-${alt}`;
+              return [{ VariantID: varID, Category: 'DenGen', AlleleCount: freq.alleleCount, AlleleNumber: freq.alleleNumber, Homozygotes: freq.alleleCountHomozygous || 0, AlleleFrequency: freq.alleleFrequency?.toFixed(6) || 'N/A' }];
             }
             return [];
-          });
-        
-          setData(parsedData);
-        
-        
+          }));
         }
-        else {
-          throw new Error(`Unsupported query type: ${type}`);
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error.message);
-        setError(error.message); // Only shown after true failure
-        setData([]);             // Optional: clear previous data
+      } catch (err) {
+        setError(err.message); setData([]);
       } finally {
-        setLoading(false);        // Always reset loading state
+        setLoading(false);
       }
-      }    
-  
+    };
     fetchData();
   }, [query, type]);
 
-
-  let ucscUrl = "";
-if (sortedData.length > 0 && sortedData[0].VariantID) {
-  const variant = sortedData[0].VariantID; // e.g. "chr1-55043548-C-T"
-  const [chrom, posStr] = variant.split("-");
-  const pos = parseInt(posStr);
-  const start = pos - 75;
-  const end = pos + 75;
-  ucscUrl = `https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&highlight=hg38.${chrom}%3A${pos}-${pos}&position=${chrom}%3A${start}-${end}`;
-}
-
-  const VariantLinks = ({ sortedData, type }) => { 
-
-  React.useEffect(() => {
-    console.log("useEffect triggered with sortedData:", sortedData);
-    console.log("🔍 useEffect triggered with type:", type);
-    if (type !== "variant") {
-      console.log("⏭ Skipping rsID fetch — not a variant page");
-      return;
-    }
-
-    if (!sortedData?.[0]?.VariantID) {
-      console.log("⚠️ No VariantID found in sortedData");
-      return;
-    }
-
-    const snv = sortedData[0].VariantID; // e.g. "chr1-55039506-C-A"
-    console.log("🧬 SNV:", snv);
-
-    const [chromosomeRaw, pos, ref, alt] = snv.split("-");
-    const chr = chromosomeRaw || null;
-
-    console.log("📌 Parsed:", { chr, pos, ref, alt });
-
-    if (!chr || !pos || !ref || !alt) {
-      console.log("❌ Missing parsed values — cannot fetch rsID");
-      return;
-    }
-
-    const variantHGVS = `${chr}:${pos}:${ref}:${alt}`;
-    const url = `https://rest.ensembl.org/variant_recoder/human/${variantHGVS}`;
-    console.log("🌐 Fetching rsID with URL:", url);
-
+  // ── rsID fetch (variant only) ──
+  useEffect(() => {
+    if (type !== 'variant' || !sortedData?.[0]?.VariantID) return;
+    const snv = sortedData[0].VariantID;
+    const [chr, pos, ref, alt] = snv.split('-');
+    if (!chr || !pos || !ref || !alt) return;
     (async () => {
       try {
-        const response = await fetch(url, { headers: { Accept: "application/json" } });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json();
-
-        console.log("📄 Raw data:", data);
-        if (!Array.isArray(data) || data.length === 0) {
-          console.warn("⚠️ Response data is not an array or empty:", data);
-          setRsID(null);
-          return;
-        }
-
-        // Try to find rsID in nested objects
-        const firstObj = data[0];
-        console.log("First object keys:", Object.keys(firstObj));
-
-        let foundRsID = null;
-        for (const key of Object.keys(firstObj)) {
-          const subObj = firstObj[key];
-          if (subObj && Array.isArray(subObj.id)) {
-            foundRsID = subObj.id.find(id => typeof id === "string" && id.startsWith("rs"));
-            if (foundRsID) {
-              console.log(`✅ Found rsID "${foundRsID}" under key "${key}"`);
-              break;
-            }
+        const res = await fetch(`https://rest.ensembl.org/variant_recoder/human/${chr}:${pos}:${ref}:${alt}`, { headers: { Accept: 'application/json' } });
+        if (!res.ok) return;
+        const d = await res.json();
+        if (!Array.isArray(d) || !d[0]) return;
+        let found = null;
+        for (const key of Object.keys(d[0])) {
+          const sub = d[0][key];
+          if (sub && Array.isArray(sub.id)) {
+            found = sub.id.find(id => typeof id === 'string' && id.startsWith('rs'));
+            if (found) break;
           }
         }
-
-        if (!foundRsID) {
-          console.log("⚠️ No rsID found in nested keys");
-          setRsID(null);
-        } else {
-          setRsID(foundRsID);
-        }
-      } catch (error) {
-        console.error("❌ Failed to fetch rsID:", error);
-        setRsID(null);
-      }
+        setRsID(found || null);
+      } catch { setRsID(null); }
     })();
-  }, [type, sortedData]);
-}
+  }, [type, JSON.stringify(sortedData)]);
 
+  // ── UCSC URL ──
+  let ucscUrl = '';
+  if (sortedData.length > 0 && sortedData[0].VariantID) {
+    const [chrom, posStr] = sortedData[0].VariantID.split('-');
+    const pos = parseInt(posStr);
+    ucscUrl = `https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&highlight=hg38.${chrom}%3A${pos}-${pos}&position=${chrom}%3A${pos - 75}-${pos + 75}`;
+  }
+
+  const externalResources = type === 'variant' && sortedData[0]?.VariantID ? [
+    { name: 'gnomAD',              url: `https://gnomad.broadinstitute.org/variant/${sortedData[0].VariantID}` },
+    { name: 'dbSNP',               url: rsID ? `https://www.ncbi.nlm.nih.gov/snp/${rsID}` : '#' },
+    { name: 'UCSC Genome Browser', url: ucscUrl },
+    { name: 'ClinGen Allele Registry', url: 'https://reg.clinicalgenome.org/redmine/projects/registry/genboree_registry/by_canonicalid?canonicalid=CA26350' },
+    { name: 'ClinVar',             url: 'https://www.ncbi.nlm.nih.gov/clinvar/variation/38266/' },
+    { name: 'All of Us',           url: `https://databrowser.researchallofus.org/snvsindels/${sortedData[0].VariantID}` },
+    { name: 'UK Biobank',          url: `https://afb.ukbiobank.ac.uk/variant/${sortedData[0].VariantID}` },
+    { name: 'FinnGen',             url: `https://r12.finngen.fi/variant/${sortedData[0].VariantID}` },
+    { name: 'SweGen',              url: `https://swefreq.nbis.se/dataset/SweGen/browser/variant/${sortedData[0].VariantID}` },
+  ] : [];
 
   return (
-    <div className="px-32">
-      <Navbar />
-      <div className="container mx-auto p-4">
+    <Layout>
 
-      {loading ? (
-  <div className="flex justify-center items-center">
-    <div className="w-16 h-16 border-t-4 border-blue-500 border-solid rounded-full animate-spin"></div>
-  </div>
-) : data.length > 0 ? (
-  <>
-    <table className="min-w-full border-collapse border border-gray-300 mt-6">
-  <thead>
-    <tr className="bg-black text-white">
-      <th className="border border-gray-300 px-4 py-2">Variant ID</th>
-      <th
-        className="border border-gray-300 px-4 py-2 cursor-pointer"
-        onClick={() => handleSort("AlleleCount")}
-      >
-        Allele Count {sortColumn === "AlleleCount" && (sortDirection === "asc" ? "↑" : "↓")}
-      </th>
-      <th
-        className="border border-gray-300 px-4 py-2 cursor-pointer"
-        onClick={() => handleSort("AlleleNumber")}
-      >
-        Allele Number {sortColumn === "AlleleNumber" && (sortDirection === "asc" ? "↑" : "↓")}
-      </th>
-      <th
-        className="border border-gray-300 px-4 py-2 cursor-pointer"
-        onClick={() => handleSort("Homozygotes")}
-      >
-        Homozygotes {sortColumn === "Homozygotes" && (sortDirection === "asc" ? "↑" : "↓")}
-      </th>
-      <th
-        className="border border-gray-300 px-4 py-2 cursor-pointer"
-        onClick={() => handleSort("AlleleFrequency")}
-      >
-        Allele Frequency {sortColumn === "AlleleFrequency" && (sortDirection === "asc" ? "↑" : "↓")}
-      </th>
-    </tr>
-  </thead>
-  <tbody>
-  {sortedData.map((item, index) => (
-    <tr key={index} className="bg-white">
-      <td className="border border-gray-300 px-4 py-2">
-        {(type === "gene" || type === "region") && item.VariantID ? (
-
-        <Link
-          to={{
-            pathname: "/search",
-            search: `?query=${item.VariantID}&type=variant`,
-          }}
-          state={{ variant: item }}
-          className="text-blue-600 hover:underline"          
-        >
-          {item.VariantID}
-        </Link>
-
-          // previous 
-
-         // <a
-         //   href={`/search?query=${item.VariantID}&type=variant`}
-         //   target="_blank"
-         //   rel="noopener noreferrer"
-         //   className="text-blue-600 hover:underline"
-         // >
-         //</td>   {item.VariantID}
-         // </a>
-        ) : (
-          item.VariantID || query
-        )}
-      </td>
-      <td className="border border-gray-300 px-4 py-2">{item.AlleleCount}</td>
-      <td className="border border-gray-300 px-4 py-2">{item.AlleleNumber}</td>
-      <td className="border border-gray-300 px-4 py-2">{item.Homozygotes}</td>
-      <td className="border border-gray-300 px-4 py-2">{item.AlleleFrequency}</td>
-    </tr>
-  ))}
-</tbody>
-</table>
-
-
-
-{type === "variant" && (
-  <>
-    <VariantLinks sortedData={sortedData} type={type} />
-    <div className="mt-6">
-      <h3 className="text-lg font-semibold">Allele Frequency External Resources</h3>
-      <div className="flex flex-wrap gap-4">
-        {[
-          { name: "gnomAD", url: `https://gnomad.broadinstitute.org/variant/${sortedData[0].VariantID}` },
-          { name: "dbSNP", url: rsID ? `https://www.ncbi.nlm.nih.gov/snp/${rsID}` : "#" },
-          { name: "UCSC Genome Browser", url: ucscUrl },
-          { name: "ClinGen Allele Registry", url: "https://reg.clinicalgenome.org/redmine/projects/registry/genboree_registry/by_canonicalid?canonicalid=CA26350" },
-          { name: "ClinVar", url: "https://www.ncbi.nlm.nih.gov/clinvar/variation/38266/" },
-          { name: "All of Us", url: `https://databrowser.researchallofus.org/snvsindels/${sortedData[0].VariantID}` },
-          { name: "ukbiobank", url: `https://afb.ukbiobank.ac.uk/variant/${sortedData[0].VariantID}` },
-          { name: "FinnGen", url: `https://r12.finngen.fi/variant/${sortedData[0].VariantID}` },
-          { name: "SweGen", url: `https://swefreq.nbis.se/dataset/SweGen/browser/variant/${sortedData[0].VariantID}` },
-        ].map((resource, index) => (
-          <a
-            key={index}
-            href={resource.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-500 hover:underline"
-          >
-            {resource.name}
-          </a>
-        ))}
-      </div>
-    </div>
-  </>
-)}
-  </>
-) : (
-  <p>No data found for the search query.</p>
-)}
-           
-  {/* First Table for Variant Information 
-
-      <h2 className="text-lg font-semibold mt-6">Variant Information</h2>
-    
-      <div className="overflow-x-auto mb-8">
-        <table className="min-w-full table-auto border-collapse border border-gray-200">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="px-4 py-2 border">Chromosome</th>
-              <th className="px-4 py-2 border">Position</th>
-              <th className="px-4 py-2 border">Reference</th>
-              <th className="px-4 py-2 border">Alternative</th>
-              <th className="px-4 py-2 border">Effect</th>
-             
-            </tr>
-          </thead>
-          <tbody>
-            {variantData.map((variant, index) => (
-              <tr key={index} className="hover:bg-gray-50">
-                <td className="px-4 py-2 border">{variant.chr}</td>
-                <td className="px-4 py-2 border">{variant.pos}</td>
-                <td className="px-4 py-2 border">{variant.ref}</td>
-                <td className="px-4 py-2 border">{variant.alt}</td>
-                <td className="px-4 py-2 border">{variant.effect}</td>
-                
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    
-      <div className="mt-6">
-  <h3 className="text-lg font-semibold">Variant External Resources</h3>
-  <div className="flex flex-wrap gap-4">
-    {[
-      { name: "Varsome variant", url: `https://varsome.com/variant/hg38/${query}` },
-      { name: "Varsome position", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-      { name: "GnomAD 4", url: `https://gnomad.broadinstitute.org/variant/${query}?dataset=gnomad_r4/` },
-      { name: "GnomAD 3", url: `https://gnomad.broadinstitute.org/variant/${query}?dataset=gnomad_r3/` },
-      { name: "GnomAD 2 (hg19)", url: `https://gnomad.broadinstitute.org/variant/${query}?dataset=gnomad_r2_1` },
-      { name: "Regeneron ME", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-      { name: "Bravo", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-      { name: "dbSNP", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-      { name: "LitVar", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-      { name: "All of us", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-    ].map((resource, index) => (
-      <a
-        key={index}
-        href={resource.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-blue-500 hover:underline"
-      >
-        {resource.name}
-      </a>
-    ))}
-  </div>
-</div>
-
-*/}
-      
-        {/* Gene information
-      <h2 className="text-lg font-semibold mt-6">Gene Information</h2>
-
-      <div className="overflow-x-auto mb-8">
-        <table className="min-w-full table-auto border-collapse border border-gray-200">
-          <thead>
-            <tr className="bg-gray-100">
-             
-              <th className="px-4 py-2 border">Transcript</th>
-              <th className="px-4 py-2 border">Gene Symbol</th>
-              <th className="px-4 py-2 border">Gene HGNC ID</th>
-              <th className="px-4 py-2 border">dbSNP</th>              
-            </tr>
-          </thead>
-          <tbody>
-            {variantData.map((variant, index) => (
-              <tr key={index} className="hover:bg-gray-50">
-                <td className="px-4 py-2 border">{variant.transcript}</td>
-                <td className="px-4 py-2 border">{variant.gene_symbol}</td>
-                <td className="px-4 py-2 border">{variant.gene_hgnc_id}</td>
-                <td className="px-4 py-2 border">{variant.dbsnp}</td>
-                
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* ── Search context bar ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '8px',
+        fontSize: '12px', color: 'var(--dg-text-muted)', marginBottom: '24px',
+      }}>
+        <Link to="/" style={{ color: 'var(--dg-blue)', textDecoration: 'none' }}>Home</Link>
+        <span>›</span>
+        <span style={{
+          background: 'var(--dg-blue-light)', color: 'var(--dg-blue)',
+          borderRadius: '99px', padding: '2px 8px', fontSize: '11px', fontWeight: 500,
+          textTransform: 'capitalize',
+        }}>
+          {type}
+        </span>
+        <span style={{ fontFamily: 'ui-monospace, monospace', color: 'var(--dg-text)', fontWeight: 500 }}>
+          {query}
+        </span>
       </div>
 
+      {loading ? <Spinner /> : error ? (
+        <div style={{
+          border: '0.5px solid #fca5a5', borderRadius: '8px',
+          background: '#fff5f5', padding: '16px 18px',
+          fontSize: '13px', color: '#b91c1c',
+        }}>
+          {error}
+        </div>
+      ) : data.length === 0 ? (
+        <div style={{
+          border: '0.5px solid var(--dg-border)', borderRadius: '8px',
+          padding: '32px', textAlign: 'center',
+          fontSize: '14px', color: 'var(--dg-text-muted)',
+        }}>
+          No variants found for <strong style={{ color: 'var(--dg-text)' }}>{query}</strong>
+        </div>
+      ) : (
+        <>
+          {/* Result count */}
+          <div style={{ fontSize: '12px', color: 'var(--dg-text-muted)', marginBottom: '10px' }}>
+            {sortedData.length.toLocaleString()} {sortedData.length === 1 ? 'variant' : 'variants'} found
+          </div>
 
-      <div className="mt-6">
-  <h3 className="text-lg font-semibold">Gene External Resources</h3>
-  <div className="flex flex-wrap gap-4">
-    {[
-      { name: "OMIM", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-      { name: "Decipher", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-      { name: "PubMed", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-      { name: "NCBI", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-      { name: "JAX", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-      { name: "SFARI", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-      { name: "GnomAD", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-      { name: "GenCC", url: `https://gnomad.broadinstitute.org/variant/${query}` },
-    ].map((resource, index) => (
-      <a
-        key={index}
-        href={resource.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-blue-500 hover:underline"
-      >
-        {resource.name}
-      </a>
-    ))}
-  </div>
-</div>
+          {/* ── Results table ── */}
+          <div style={{ border: '0.5px solid var(--dg-border)', borderRadius: '10px', overflow: 'hidden', marginBottom: '28px' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{
+                      padding: '10px 14px', fontSize: '12px', fontWeight: 500,
+                      color: 'var(--dg-text-muted)', textAlign: 'left',
+                      borderBottom: '0.5px solid var(--dg-border)',
+                      background: 'var(--dg-blue-bg)',
+                    }}>
+                      Variant ID
+                    </th>
+                    {[
+                      { col: 'AlleleCount',     label: 'Allele count' },
+                      { col: 'AlleleNumber',    label: 'Allele number' },
+                      { col: 'Homozygotes',     label: 'Homozygotes' },
+                      { col: 'AlleleFrequency', label: 'Allele frequency' },
+                    ].map(({ col, label }) => (
+                      <SortTh key={col} column={col} label={label}
+                        sortColumn={sortColumn} sortDirection={sortDirection}
+                        onSort={handleSort} />
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedData.map((item, idx) => (
+                    <tr key={idx} style={{ borderBottom: '0.5px solid var(--dg-border)' }}
+                      onMouseOver={e => e.currentTarget.style.background = '#fafcff'}
+                      onMouseOut={e => e.currentTarget.style.background = '#fff'}
+                    >
+                      <td style={{ padding: '10px 14px', fontSize: '13px', fontFamily: 'ui-monospace, monospace', color: 'var(--dg-text)' }}>
+                        {(type === 'gene' || type === 'region') && item.VariantID ? (
+                          <Link
+                            to={{ pathname: '/search', search: `?query=${item.VariantID}&type=variant` }}
+                            state={{ variant: item }}
+                            style={{ color: 'var(--dg-blue)', textDecoration: 'none', fontWeight: 500 }}
+                          >
+                            {item.VariantID}
+                          </Link>
+                        ) : (
+                          item.VariantID || query
+                        )}
+                      </td>
+                      {['AlleleCount', 'AlleleNumber', 'Homozygotes', 'AlleleFrequency'].map(col => (
+                        <td key={col} style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--dg-text)' }}>
+                          {item[col]}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-      <h2 className="text-lg font-semibold mt-6">ACMG Information</h2>
-      <div className="overflow-x-auto mb-8">
-        <table className="min-w-full table-auto border-collapse border border-gray-200">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="px-4 py-2 border">acmg score</th>
-              <th className="px-4 py-2 border">acmg classification</th>
-              <th className="px-4 py-2 border">acmg criteria</th>
-
-             
-            </tr>
-          </thead>
-          <tbody>
-            {variantData.map((variant, index) => (
-              <tr key={index} className="hover:bg-gray-50">
-                <td className="px-4 py-2 border">{variant.acmg_score}</td>
-                <td className="px-4 py-2 border">{variant.acmg_classification}</td>
-                <td className="px-4 py-2 border">{variant.acmg_criteria}</td>
-
-                
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-       */}
-
-      {/* Second Table for Consequences (RefSeq) 
-      <h2 className="text-lg font-semibold mt-6">RefSeq Consequences</h2>
-      <div className="overflow-x-auto">
-        <table className="min-w-full table-auto border-collapse border border-gray-200">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="px-4 py-2 border">AA Ref</th>
-              <th className="px-4 py-2 border">AA Alt</th>
-              <th className="px-4 py-2 border">Canonical</th>
-              <th className="px-4 py-2 border">Protein Coding</th>
-              <th className="px-4 py-2 border">Consequences</th>
-              <th className="px-4 py-2 border">Exon Rank</th>
-              <th className="px-4 py-2 border">Exon Count</th>
-              <th className="px-4 py-2 border">HGVS c</th>
-              <th className="px-4 py-2 border">HGVS p</th>
-              <th className="px-4 py-2 border">Transcript</th>
-              <th className="px-4 py-2 border">Protein ID</th>
-              <th className="px-4 py-2 border">Amino Acid Start</th>
-              <th className="px-4 py-2 border">Amino Acid Length</th>
-              <th className="px-4 py-2 border">CDS Start</th>
-              <th className="px-4 py-2 border">CDS Length</th>
-              <th className="px-4 py-2 border">cDNA Start</th>
-              <th className="px-4 py-2 border">cDNA Length</th>
-              <th className="px-4 py-2 border">MANE Select</th>
-            </tr>
-          </thead>
-          <tbody>
-            {variantData[0].consequences_refseq.map((consequence, index) => (
-              <tr key={index} className="hover:bg-gray-50">
-                <td className="px-4 py-2 border">{consequence.aa_ref}</td>
-                <td className="px-4 py-2 border">{consequence.aa_alt}</td>
-                <td className="px-4 py-2 border">{consequence.canonical ? 'Yes' : 'No'}</td>
-                <td className="px-4 py-2 border">{consequence.protein_coding ? 'Yes' : 'No'}</td>
-                <td className="px-4 py-2 border">{consequence.consequences.join(', ')}</td>
-                <td className="px-4 py-2 border">{consequence.exon_rank}</td>
-                <td className="px-4 py-2 border">{consequence.exon_count}</td>
-                <td className="px-4 py-2 border">{consequence.hgvs_c}</td>
-                <td className="px-4 py-2 border">{consequence.hgvs_p}</td>
-                <td className="px-4 py-2 border">{consequence.transcript}</td>
-                <td className="px-4 py-2 border">{consequence.protein_id}</td>
-                <td className="px-4 py-2 border">{consequence.aa_start}</td>
-                <td className="px-4 py-2 border">{consequence.aa_length}</td>
-                <td className="px-4 py-2 border">{consequence.cds_start}</td>
-                <td className="px-4 py-2 border">{consequence.cds_length}</td>
-                <td className="px-4 py-2 border">{consequence.cdna_start}</td>
-                <td className="px-4 py-2 border">{consequence.cdna_length}</td>
-                <td className="px-4 py-2 border">{consequence.mane_select}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      */}
-
-
-       {/* Third  Table for Consequences (Ensembl) 
-
-      <h2 className="text-lg font-semibold mt-6">Ensembl Consequences</h2>
-      <div className="overflow-x-auto">
-        <table className="min-w-full table-auto border-collapse border border-gray-200">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="px-4 py-2 border">AA Ref</th>
-              <th className="px-4 py-2 border">AA Alt</th>
-              <th className="px-4 py-2 border">Canonical</th>
-              <th className="px-4 py-2 border">Protein Coding</th>
-              <th className="px-4 py-2 border">Consequences</th>
-              <th className="px-4 py-2 border">Exon Rank</th>
-              <th className="px-4 py-2 border">Exon Count</th>
-              <th className="px-4 py-2 border">HGVS c</th>
-              <th className="px-4 py-2 border">HGVS p</th>
-              <th className="px-4 py-2 border">Transcript</th>
-              <th className="px-4 py-2 border">Protein ID</th>
-              <th className="px-4 py-2 border">Amino Acid Start</th>
-              <th className="px-4 py-2 border">Amino Acid Length</th>
-              <th className="px-4 py-2 border">CDS Start</th>
-              <th className="px-4 py-2 border">CDS Length</th>
-              <th className="px-4 py-2 border">cDNA Start</th>
-              <th className="px-4 py-2 border">cDNA Length</th>
-              <th className="px-4 py-2 border">MANE Select</th>
-            </tr>
-          </thead>
-          <tbody>
-            {variantData[0].consequences_ensembl.map((consequence, index) => (
-              <tr key={index} className="hover:bg-gray-50">
-                <td className="px-4 py-2 border">{consequence.aa_ref}</td>
-                <td className="px-4 py-2 border">{consequence.aa_alt}</td>
-                <td className="px-4 py-2 border">{consequence.canonical ? 'Yes' : 'No'}</td>
-                <td className="px-4 py-2 border">{consequence.protein_coding ? 'Yes' : 'No'}</td>
-                <td className="px-4 py-2 border">{consequence.consequences.join(', ')}</td>
-                <td className="px-4 py-2 border">{consequence.exon_rank}</td>
-                <td className="px-4 py-2 border">{consequence.exon_count}</td>
-                <td className="px-4 py-2 border">{consequence.hgvs_c}</td>
-                <td className="px-4 py-2 border">{consequence.hgvs_p}</td>
-                <td className="px-4 py-2 border">{consequence.transcript}</td>
-                <td className="px-4 py-2 border">{consequence.protein_id}</td>
-                <td className="px-4 py-2 border">{consequence.aa_start}</td>
-                <td className="px-4 py-2 border">{consequence.aa_length}</td>
-                <td className="px-4 py-2 border">{consequence.cds_start}</td>
-                <td className="px-4 py-2 border">{consequence.cds_length}</td>
-                <td className="px-4 py-2 border">{consequence.cdna_start}</td>
-                <td className="px-4 py-2 border">{consequence.cdna_length}</td>
-                <td className="px-4 py-2 border">{consequence.mane_select}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      */}
-
-
-                 
-      
-       {/* Allele Frequency Information Table 
-       <AlleleFrequency data={variantData} />
-      */}
-
-       {/* Variant Information Table 
-      <VariantInformation data={variantData} />
-       */}
-
-      {/* Gene Information Table 
-      <GeneInformation data={variantData} />
-      */}
-
-      {/* ACMG Information Table 
-      <ACMGInformation data={variantData} />
-      */}
-      
-      {/* Consequence Ensembl Information Table */}
-      {/*<ConsequencesEnsembl data={variantData} /> */}
-
-      {/* Consequence RefSeq Information Table */}
-     {/* <ConsequencesRefSeq data={variantData} />*/}
-    
-      </div>
-
-      
-
-      <Footer />
-      <Logos />
-    </div>
+          {/* ── External resources (variant only) ── */}
+          {type === 'variant' && externalResources.length > 0 && (
+            <div style={{ marginBottom: '40px' }}>
+              <div style={{
+                fontSize: '11px', fontWeight: 500, textTransform: 'uppercase',
+                letterSpacing: '0.08em', color: 'var(--dg-text-muted)', marginBottom: '12px',
+              }}>
+                Allele Frequency External Resources
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {externalResources.map(r => <ResourcePill key={r.name} {...r} />)}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </Layout>
   );
 };
 
 export default SearchResults;
-
-
-
-
-
-

@@ -1,121 +1,167 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import Logos from '../components/Logos';
-import { useNavigate } from "react-router-dom";
 import config from '../config';
+
+function classifyQuery(query) {
+  const cleaned = query.trim().toLowerCase();
+  if (/^chr[0-9xy]+-\d+-\d+$/i.test(cleaned))             return "region";
+  if (/^chr[0-9xy]+-\d+-[acgt]+-[acgt]+$/i.test(cleaned)) return "variant";
+  if (/^[a-z0-9\-\.]{2,20}$/i.test(cleaned))              return "gene";
+  return "unknown";
+}
+
+const examples = [
+  { label: "PCSK9",                   value: "PCSK9",                  type: "Gene" },
+  { label: "chr11-102904-C-G",        value: "chr11-102904-C-G",       type: "Variant" },
+  { label: "chr1-55039445-55064852",  value: "chr1-55039445-55064852", type: "Region" },
+];
+
+const stats = [
+  { value: "2,211",  label: "Unrelated individuals" },
+  { value: "78.5M", label: "SNV Variants detected" },
+  { value: "52×+",   label: "Avg. sequencing depth" },
+  { value: "GRCh38", label: "Reference genome" }
+];
+
 const SearchComponent = () => {
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
 
-  
-  // Classify query as gene, region, or variant
-  function classifyQuery(query) {
-    const cleaned = query.trim().toLowerCase();
-
-    if (/^chr[0-9xy]+-\d+-\d+$/i.test(cleaned)) {
-      return "region";
-    }
-
-    if (/^chr[0-9xy]+-\d+-[acgt]+-[acgt]+$/i.test(cleaned)) {
-      return "variant";
-    }
-
-    if (/^[a-z0-9\-\.]{2,20}$/i.test(cleaned)) {
-      return "gene";
-    }
-
-    return "unknown";
-  }
-  
-
   function handleSearch(e) {
     e.preventDefault();
     const type = classifyQuery(query);
-  
-    switch (type) {
-      case "gene":        
-        navigate(`/search?query=${query}&type=gene`);
-        break;
-  
-      case "region":
-        console.log(`Searching region: ${query}`);
-        navigate(`/search?query=${query}&type=region`);
-        break;
-  
-      case "variant":
-        console.log(`Searching variant: ${query}`);
-        navigate(`/search?query=${query}&type=variant`);
-        break;
-  
-      default:
-        console.warn("Unrecognized input format");
-    }
+    if (type !== "unknown") navigate(`/search?query=${query}&type=${type}`);
+    else console.warn("Unrecognized input format");
   }
-  
 
   return (
-    <div className="px-32">
+    <div style={{
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      padding: "0 48px", maxWidth: "1100px", margin: "0 auto",
+    }}>
       <Navbar />
 
-      <div className="container mx-auto py-8">
-      <h1 className="text-4xl font-bold text-center mb-6"> Dengen Allele Frequency Browser</h1>     
-      </div>
+      {/* ── Hero ── */}
+      <div style={{
+        background: "#f0f7ff",
+        borderBottom: "0.5px solid #cce0f5",
+        padding: "56px 48px",
+        marginLeft: "-48px",
+        marginRight: "-48px",
+      }}>
+        <span style={{
+          display: "inline-block",
+          fontSize: "11px", fontWeight: 500,
+          letterSpacing: "0.08em", textTransform: "uppercase",
+          color: "#1a6fa8", background: "#daeeff",
+          borderRadius: "99px", padding: "3px 10px", marginBottom: "16px",
+        }}>
+          Danish population genomics
+        </span>
 
-      <div className="flex flex-col items-center p-6">
-        {/* Search Form */}
-        <form onSubmit={handleSearch} className="flex items-center space-x-2">
+        <h1 style={{
+          fontSize: "36px", fontWeight: 500, color: "#0a3a5e",
+          lineHeight: 1.2, marginBottom: "14px", maxWidth: "560px",
+        }}>
+          DenGen Allele Frequency Browser
+        </h1>
+
+        <p style={{
+          fontSize: "15px", color: "#3a6080", lineHeight: 1.75,
+          maxWidth: "520px", marginBottom: "28px",
+        }}>
+          The DenGen Allele Frequency Browser is a resource of variant allele frequencies
+          made publicly available. The dataset encompasses SNP and indel variant calls in
+          2,211 individuals from whole genome sequencing of all Danish DenGen participants.
+        </p>
+
+        {/* Search bar */}
+        <form onSubmit={handleSearch} style={{ display: "flex", gap: "8px", maxWidth: "520px", marginBottom: "16px" }}>
           <input
             type="text"
-            placeholder="Search by gene, variant or region"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="p-2 border rounded-lg w-96 shadow-sm focus:ring focus:ring-blue-300"
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Gene, variant (chr1-pos-ref-alt) or region (chr1-start-end)"
+            style={{
+              flex: 1, padding: "10px 14px",
+              border: "0.5px solid #cce0f5",
+              borderRadius: "6px", fontSize: "13px",
+              fontFamily: "inherit", color: "#0f1f2e",
+              background: "#fff", outline: "none",
+              transition: "border-color 0.15s",
+            }}
+            onFocus={e => e.target.style.borderColor = "#1a6fa8"}
+            onBlur={e => e.target.style.borderColor = "#cce0f5"}
           />
-          <button
-            type="submit"
-            className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          <button type="submit" style={{
+            background: "#1a6fa8", color: "#fff",
+            border: "none", borderRadius: "6px",
+            padding: "10px 22px", fontSize: "13px", fontWeight: 500,
+            fontFamily: "inherit", cursor: "pointer",
+            transition: "opacity 0.15s",
+          }}
+            onMouseOver={e => e.currentTarget.style.opacity = "0.88"}
+            onMouseOut={e => e.currentTarget.style.opacity = "1"}
           >
             Search
           </button>
         </form>
 
-        {/* Example Searches */}
-        <div className="mt-4">
-          <h3 className="text-lg font-semibold">Example Searches:</h3>
-          <ul className="mt-2 text-blue-500">
-            
-            <li>
-              <Link to="#" onClick={() => setQuery("PCSK9")}>PCSK9</Link>
-            </li>
-            
-            <li> 
-              <Link to="#" onClick={() => setQuery("chr11-102904-C-G")}>chr11-102904-C-G</Link>
-            </li>
-           {/*
-            <li>
-              <Link to="#" onClick={() => setQuery("chr13-32398489-A-T")}>chr13-32398489-A-T</Link>
-            </li>
-             */}
-            <li>
-              <Link to="#" onClick={() => setQuery("chr1-55039445-55064852")}>chr1-55039445-55064852</Link>
-            </li>           
-          </ul>
+        {/* Example searches */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "12px", color: "#3a6080" }}>Try:</span>
+          {examples.map(ex => (
+            <button key={ex.value} onClick={() => setQuery(ex.value)} style={{
+              background: "#fff", border: "0.5px solid #cce0f5",
+              borderRadius: "99px", padding: "3px 10px",
+              fontSize: "12px", fontFamily: "inherit",
+              color: "#5a7a90", cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: "5px",
+              transition: "border-color 0.15s",
+            }}
+              onMouseOver={e => e.currentTarget.style.borderColor = "#1a6fa8"}
+              onMouseOut={e => e.currentTarget.style.borderColor = "#cce0f5"}
+            >
+              <span style={{
+                fontSize: "10px", fontWeight: 500, color: "#1a6fa8",
+                background: "#daeeff", borderRadius: "99px", padding: "1px 5px",
+              }}>
+                {ex.type}
+              </span>
+              {ex.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Centered Statement */}
-      <div className="text-center px-6 py-8">
-        <p className="text-md">
-          The DenGen Allele Frequency Browser is a resource of variant allele frequencies and is being made publicly available.
-          The dataset encompasses SNP and indel variant calls in 2,211 individuals from whole genome sequencing of all Danish DenGen participants.  <a href={config.DENGEN_LANDING_PAGE} className="text-blue-500 underline">Learn more about DenGen</a>. 
-        </p>
+      {/* ── Stats strip ── */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+        borderBottom: "0.5px solid rgba(15,31,46,0.12)",
+        marginLeft: "-48px", marginRight: "-48px",
+      }}>
+        {stats.map((s, i) => (
+          <div key={i} style={{
+            padding: "22px 32px",
+            borderRight: i < stats.length - 1 ? "0.5px solid rgba(15,31,46,0.12)" : "none",
+          }}>
+            <div style={{ fontSize: "22px", fontWeight: 500, color: "#0a3a5e" }}>{s.value}</div>
+            <div style={{ fontSize: "12px", color: "#5a7a90", marginTop: "3px" }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Learn more ── */}
+      <div style={{ padding: "28px 0 60px" }}>
+        <a href={config.DENGEN_LANDING_PAGE} target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: "13px", fontWeight: 500, color: "#1a6fa8", textDecoration: "none" }}>
+          Learn more about DenGen →
+        </a>
       </div>
 
       <Footer />
-      
-      <Logos />
     </div>
   );
 };
