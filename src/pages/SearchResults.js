@@ -5,6 +5,39 @@ import config from '../config';
 
 const endpoint = config.BEACON_API;
 
+// ── Beacon pagination ──────────────────────────────────────────────
+// The Beacon caps each response (numTotalResults may exceed results.length),
+// so region/gene queries are fetched page by page.
+const PAGE_SIZE    = 100;
+const MAX_PAGES    = 500;   // safety cap: 50,000 variants
+const SKIP_IS_PAGE = true;  // Beacon v2 spec: skip = pages to skip. Set false if the server treats skip as a record offset.
+
+const fetchBeaconPage = async (baseUrl, page, errMsg) => {
+  const skip = SKIP_IS_PAGE ? page : page * PAGE_SIZE;
+  const response = await fetch(`${baseUrl}&limit=${PAGE_SIZE}&skip=${skip}`, { headers: { 'Content-Type': 'application/json' } });
+  if (!response.ok) throw new Error(errMsg);
+  const result = await response.json();
+  return {
+    results: result.response?.resultSets?.[0]?.results || [],
+    total:   result.responseSummary?.numTotalResults,
+  };
+};
+
+const fetchAllVariants = async (baseUrl, errMsg) => {
+  const first = await fetchBeaconPage(baseUrl, 0, errMsg);
+  const all = [...first.results];
+  if (typeof first.total !== 'number' || first.results.length === 0 || all.length >= first.total) return all;
+
+  // Use the server's effective page size (it may be below PAGE_SIZE)
+  const effSize = first.results.length;
+  const pages = Math.min(Math.ceil(first.total / effSize), MAX_PAGES);
+  const rest = await Promise.all(
+    Array.from({ length: pages - 1 }, (_, i) => fetchBeaconPage(baseUrl, i + 1, errMsg))
+  );
+  rest.forEach(p => all.push(...p.results));
+  return all;
+};
+
 // ── Sorting header cell ────────────────────────────────────────────
 const SortTh = ({ column, label, sortColumn, sortDirection, onSort }) => {
   const active = sortColumn === column;
@@ -84,7 +117,7 @@ const SearchResults = () => {
     return sortDirection === 'asc' ? va - vb : vb - va;
   });
 
-  // ── Data fetching (unchanged logic) ──
+  // ── Data fetching ──
   useEffect(() => {
     if (variantFromState) { setData([variantFromState]); setLoading(false); return; }
     if (!query || !type) return;
@@ -95,7 +128,7 @@ const SearchResults = () => {
         if (type === 'variant') {
           const [chrom, pos, ref, alt] = query.split('-');
           if (!chrom || !pos || !ref || !alt) throw new Error('Invalid variant format. Expected chr-pos-ref-alt.');
-          const apiUrl = `${endpoint}/g_variants?start=${pos}&alternateBases=${alt}&referenceBases=${ref}&referenceName=${chrom.replace('chr', '')}&assemblyId=GRCh38&limit=1000000`;
+          const apiUrl = `${endpoint}/g_variants?start=${pos}&alternateBases=${alt}&referenceBases=${ref}&referenceName=${chrom.replace('chr', '')}&assemblyId=GRCh38&limit=1`;
           const response = await fetch(apiUrl, { headers: { 'Content-Type': 'application/json' } });
           if (!response.ok) throw new Error('Failed to fetch variant data');
           const result = await response.json();
@@ -111,11 +144,8 @@ const SearchResults = () => {
           if (!geneRes.ok) throw new Error(`Gene ${query} not found`);
           const geneData = await geneRes.json();
           const { seq_region_name: chrom, start, end } = geneData;
-          const regionUrl = `${endpoint}/g_variants?start=${start}&end=${end}&referenceName=${chrom}&assemblyId=GRCh38&limit=1000000`;
-          const response = await fetch(regionUrl, { headers: { 'Content-Type': 'application/json' } });
-          if (!response.ok) throw new Error('Failed to fetch regional variants');
-          const result = await response.json();
-          const variants = result.response?.resultSets?.[0]?.results || [];
+          const regionUrl = `${endpoint}/g_variants?start=${start}&end=${end}&referenceName=${chrom}&assemblyId=GRCh38`;
+          const variants = await fetchAllVariants(regionUrl, 'Failed to fetch regional variants');
           setData(variants.flatMap(variant => {
             const freq = variant.frequencyInPopulations?.[0]?.frequencies?.[0];
             if (freq) {
@@ -132,11 +162,8 @@ const SearchResults = () => {
           const regionMatch = query.match(/^chr(\w+)-(\d+)-(\d+)$/);
           if (!regionMatch) throw new Error('Invalid region format. Use chr1-start-end');
           const [, chrom, start, end] = regionMatch;
-          const regionUrl = `${endpoint}/g_variants?start=${start}&end=${end}&referenceName=${chrom}&assemblyId=GRCh38&limit=1000000`;
-          const response = await fetch(regionUrl, { headers: { 'Content-Type': 'application/json' } });
-          if (!response.ok) throw new Error('Failed to fetch region variants');
-          const result = await response.json();
-          const variants = result.response?.resultSets?.[0]?.results || [];
+          const regionUrl = `${endpoint}/g_variants?start=${start}&end=${end}&referenceName=${chrom}&assemblyId=GRCh38`;
+          const variants = await fetchAllVariants(regionUrl, 'Failed to fetch region variants');
           setData(variants.flatMap(variant => {
             const freq = variant.frequencyInPopulations?.[0]?.frequencies?.[0];
             const s = variant.variation?.location?.interval?.start?.value;
